@@ -1,0 +1,72 @@
+name: Roku build, test, docker hub push & deploy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install node v12
+      uses: actions/setup-node@v1
+      with:
+        node-version: 12
+    - name: yarn install
+      run: yarn install
+    - name: tsc
+      uses: icrawl/action-tsc@v1
+      
+  test:
+      name: test
+      needs: build
+      runs-on: ubuntu-latest
+      steps:
+      - uses: actions/checkout@v1
+      - name: install node v12
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12
+      - name: yarn install
+        run: yarn install
+      - run: npm test
+  
+  publish:
+      needs: test
+      name: publish
+      runs-on: ubuntu-latest
+      steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v1 
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: nickvanoijen/roku:latest
+        
+  deploy:
+      needs: publish
+      name: deploy
+      runs-on: ubuntu-latest
+      steps:
+      - name: executing remote ssh commands using password
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key:  ${{ secrets.SSH_KEY }}
+          script: docker stop roku && docker rm roku && docker pull nickvanoijen/roku:latest && docker run -d --name roku -e ROKU_AUTH_PASSWORD=${{secrets.ROKU_AUTH_PASSWORD}} -e ROKU_AUTH_USERNAME=${{secrets.ROKU_AUTH_USERNAME}} -e ROKU_AUTH_IP=${{secrets.ROKU_AUTH_IP}} -p 80:7000 nickvanoijen/roku:latest
