@@ -25,6 +25,8 @@ jobs:
       name: test
       needs: build
       runs-on: ubuntu-latest
+      env: 
+        ROKU_SECRET_KEY: ${{secrets.ROKU_SECRET_KEY}}
       steps:
       - uses: actions/checkout@v1
       - name: install node v12
